@@ -19,7 +19,7 @@ The name is stylized as `learnit::r8`, but the Python package name is `learnit_r
 
 <hr/>
 <img style="max-height:512px" src="https://github.com/cekkr/learnit-r8/blob/main/assets/gem_graph.png?raw=true"/>
-<i>Learning rate average approach</i>
+<i>Learning rate average approach (confused but happy to exist)</i>
 <hr/>
 
 ## Installation
