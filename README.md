@@ -88,7 +88,7 @@ finally:
 print("\nTraining complete!")
 ```
 
-# Deeply deep delving
+# Deeply deep delving-doo
 
 ## How It Works: The `learnit::r8` Philosophy
 
