@@ -172,4 +172,37 @@ if scheduler.global_step % 50 == 0:
 
 If an explosion happens, the scheduler automatically triggers your `load_callback` with this in-memory backup, instantly restoring the model to its last stable state and allowing training to continue, often with a temporarily reduced learning rate. This turns a potentially run-ending crash into a small, self-corrected hiccup.
 
-Vibe coded.
+### Estimating Single Data Point Loss: The Math
+
+A key challenge is that during training, you get a **single loss value for an entire batch** of data. How can we possibly know the specific contribution of each individual sample to that loss? The system is mathematically underdetermined for a single step.
+
+The solution is to estimate it statistically over time. `learnit::r8` uses a method based on a corrective **Exponential Moving Average (EMA)**. The core idea is that while we can't know the true loss of a sample from one batch, we can refine our estimate for it each time it's used.
+
+Here is the process for each training step:
+
+1.  **Predict**: Before the update, the scheduler looks at the samples in the batch it just provided. Based on their historical performance, it calculates an **expected loss** for the batch by averaging the current `avg_loss` of all samples within it.
+
+2.  **Observe**: It receives the **actual loss** (`batch_loss`) that you provide from your model's training step.
+
+3.  **Correct**: It calculates the difference between the actual and expected loss. We call this the **"surprise" ($\\delta$)**, as it represents how much better or worse the batch performed than anticipated.
+
+    $$
+    $$$$\\delta = \\text{actual\_loss} - \\text{expected\_loss}
+
+    $$
+    $$$$
+    $$
+4.  **Update**: The scheduler updates the `avg_loss` for *every sample* in that batch by adding a small fraction of the "surprise" to their previous average.
+
+    The mathematical update rule for a sample $i$ that was in the batch is:
+
+    $$
+    $$$$\\text{AvgLoss}*{\\text{new}}(i) = \\text{AvgLoss}*{\\text{old}}(i) + \\alpha \\cdot \\delta
+
+    $$
+    $$$$Where $\\alpha$ is a small smoothing factor (e.g., `0.1`), which acts like a learning rate for the loss estimation itself.
+
+**Why is this effective?** This method is more robust than simply averaging the batch loss. If a batch performs surprisingly well (a negative $\\delta$), all samples in it get a small credit, nudging their estimated loss down. If it performs poorly (a positive $\\delta$), they all share a bit of the blame. Over many epochs, as samples appear in different batches with different companions, these small, iterative corrections converge towards a stable and accurate estimate of each sample's true "difficulty."
+
+<hr>
+Vibe coded by Riccardo Cecchini & Gemini ★★★★

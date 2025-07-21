@@ -124,16 +124,42 @@ class R8Scheduler:
             self._handle_gradient_explosion()
             return
 
-        # Update stats for samples in the last batch
+        # --- START OF EDITED SECTION ---
+        # This improved method uses a "predict and correct" approach to estimate
+        # individual sample loss more accurately.
+
+        alpha = 0.1  # The smoothing factor for the loss estimation update
+
+        # 1. Predict the expected loss for this batch based on historical data.
+        # We only consider samples that have been seen at least once.
+        valid_samples_in_batch = [
+            idx for idx in self.current_batch_indices if self.sample_stats[idx]['avg_loss'] != float('inf')
+        ]
+        
+        if not valid_samples_in_batch:
+            # If all samples in the batch are new, the best estimate for expected loss is the batch loss itself.
+            expected_loss = batch_loss
+        else:
+            # Otherwise, calculate the mean of the known average losses.
+            expected_loss = np.mean([self.sample_stats[idx]['avg_loss'] for idx in valid_samples_in_batch])
+            
+        # 2. Calculate the "surprise": the difference between actual and expected loss.
+        surprise = batch_loss - expected_loss
+        
+        # 3. Correct the average loss for each sample in the batch based on the surprise.
         for idx in self.current_batch_indices:
             stats = self.sample_stats[idx]
             stats['usage_count'] += 1
-            # Use an exponential moving average for individual loss
+            
             if stats['avg_loss'] == float('inf'):
+                # For a sample seen for the very first time, initialize its loss with the batch_loss.
                 stats['avg_loss'] = batch_loss
             else:
-                stats['avg_loss'] = 0.9 * stats['avg_loss'] + 0.1 * batch_loss
+                # For samples we've seen before, apply the corrective update.
+                stats['avg_loss'] += alpha * surprise
         
+        # --- END OF EDITED SECTION ---
+
         self.last_stable_loss = (self.last_stable_loss * 9 + batch_loss) / 10
         self.global_step += 1
         self._update_lr()
