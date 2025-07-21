@@ -17,6 +17,11 @@ The name is stylized as `learnit::r8`, but the Python package name is `learnit_r
     -   Callback-driven system for saving and loading model states.
     -   Features a CPU RAM backup mechanism to instantly recover from gradient explosions without reloading from disk.
 
+<hr/>
+<img style="max-height:512px" src="https://github.com/cekkr/learnit-r8/blob/main/assets/gem_graph.png?raw=true"/>
+<i>Learning rate average approach</i>
+<hr/>
+
 ## Installation
 
 ```bash
