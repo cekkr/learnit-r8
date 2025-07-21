@@ -185,14 +185,12 @@ Here is the process for each training step:
 2.  **Observe**: It receives the **actual loss** (`batch_loss`) that you provide from your model's training step.
 
 3.  **Correct**: It calculates the difference between the actual and expected loss. We call this the **"surprise" ($\\delta$)**, as it represents how much better or worse the batch performed than anticipated.
-   
-   <img style="max-height:60px" src="https://github.com/cekkr/learnit-r8/blob/main/assets/actualLoss.png?raw=true"/>
+    <img style="max-height:60px; background-color:white;" src="https://github.com/cekkr/learnit-r8/blob/main/assets/actualLoss.png?raw=true"/>
 
 4.  **Update**: The scheduler updates the `avg_loss` for *every sample* in that batch by adding a small fraction of the "surprise" to their previous average.
 
     The mathematical update rule for a sample $i$ that was in the batch is:
-
-    <img style="max-height:120px" src="https://github.com/cekkr/learnit-r8/blob/main/assets/avgLoss.png?raw=true"/>
+    <img style="max-height:120px; background-color:white;" src="https://github.com/cekkr/learnit-r8/blob/main/assets/avgLoss.png?raw=true"/>
 
     Where $\\alpha$ is a small smoothing factor (e.g., `0.1`), which acts like a learning rate for the loss estimation itself.
 
