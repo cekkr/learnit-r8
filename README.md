@@ -196,5 +196,99 @@ Here is the process for each training step:
 
 **Why is this effective?** This method is more robust than simply averaging the batch loss. If a batch performs surprisingly well (a negative $\\delta$), all samples in it get a small credit, nudging their estimated loss down. If it performs poorly (a positive $\\delta$), they all share a bit of the blame. Over many epochs, as samples appear in different batches with different companions, these small, iterative corrections converge towards a stable and accurate estimate of each sample's true "difficulty."
 
+## New Feature Explanations
+
+### 1\. Batch Loss Targeting
+
+The batch selection logic is now more intelligent. In addition to sampling from different loss "quadrants," it actively tries to construct batches where the *predicted average loss* of the samples matches the **current overall average loss of the entire dataset**.
+
+  * **How it Works**: After an initial batch is proposed, a new method, `_adjust_batch_to_target_loss`, makes small swaps. If the batch is predicted to be "too easy" (loss is too low), it swaps some low-loss samples for available higher-loss ones, and vice-versa. This ensures each batch is a representative challenge for the model's current state, leading to more stable training.
+  * **How to Use**: This is enabled by default. No changes are needed in your training loop.
+
+### 2\. Deeper Training from a Checkpoint
+
+You can now initialize the scheduler directly from a saved `.json` state file to continue a previous training run or start a "deeper" training phase.
+
+  * **How it Works**: A new class method, `R8Scheduler.resume_from_checkpoint()`, loads the entire state of the scheduler (including all data loss profiles). You can then provide a *new* goal, like more epochs or a longer training time.
+  * **How to Use**: Instead of `R8Scheduler(...)`, start your new training script with the class method.
+
+<!-- end list -->
+
+```python
+# Instead of creating a new scheduler, resume from a previous run
+scheduler = R8Scheduler.resume_from_checkpoint(
+    checkpoint_path='./checkpoints/scheduler_epoch_9_step_310.json',
+    # Provide your callbacks again
+    save_callback=save_model_callback,
+    load_callback=load_model_callback,
+    # Set a NEW goal
+    num_epochs=20 # Train for 10 more epochs (from 10 to 20)
+)
+
+# Then, run your training loop as usual
+# ...
+```
+
+### 3\. Automatic Learning Rate Finder
+
+The scheduler can now perform a short, automated test to find a near-optimal starting (or highest) learning rate, removing the guesswork.
+
+  * **How it Works**: The new `find_optimal_lr()` method starts at a very low LR and rapidly increases it with each batch. It records the loss at each step. When the loss explodes (shoots up or becomes `NaN`), the test stops. It then analyzes the loss curve and suggests an LR that is aggressive but stable (typically one order of magnitude lower than the learning rate at which the minimum loss occurred). Your model's state is automatically saved before the test and restored afterward, so it is not affected.
+  * **How to Use**: Call this method *before* you initialize your main scheduler.
+
+<!-- end list -->
+
+```python
+# 1. Create a temporary scheduler instance for the test
+lr_finder_scheduler = R8Scheduler(num_samples=1000, batch_size=32, ...)
+
+# 2. Run the finder
+print("Finding optimal learning rate...")
+# You must provide your model, train function, and optionally a device
+optimal_lr = lr_finder_scheduler.find_optimal_lr(
+    model_state=mock_model_state_dict, 
+    train_step_func=my_train_step
+)
+print(f"Suggested Optimal LR: {optimal_lr:.6f}")
+
+# 3. Use the found LR to create your main scheduler for the real training
+scheduler = R8Scheduler(
+    num_samples=1000,
+    initial_lr=optimal_lr,
+    ...
+)
+# ...
+```
+
+### 4\. Train by Time
+
+Instead of specifying the number of epochs, you can now tell the scheduler to train for a specific duration (e.g., 12 hours).
+
+  * **How it Works**: By providing the `train_duration_seconds` argument during initialization, the scheduler's internal iterators will run until the wall-clock time has elapsed. The concepts of epochs and total steps are still used for scheduling the learning rate, but termination is governed by time.
+  * **How to Use**: Set `train_duration_seconds` in the constructor and omit `num_epochs`.
+
+<!-- end list -->
+
+```python
+import_time
+
+# Train for 30 minutes (30 * 60 seconds)
+scheduler = R8Scheduler(
+    num_samples=1000,
+    batch_size=32,
+    initial_lr=0.01,
+    train_duration_seconds=30 * 60, # num_epochs is ignored if this is set
+    ...
+)
+
+# The training loop is identical, it will just stop after 30 minutes
+try:
+    for epoch in scheduler.epoch_iterator():
+        for batch_indices, lr in scheduler.batch_iterator():
+            # ...
+# The loop will break automatically when time is up
+```
+
+
 <hr>
 Vibe coded by Riccardo Cecchini & Gemini ★★★★
