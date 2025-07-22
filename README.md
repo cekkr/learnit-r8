@@ -229,36 +229,29 @@ scheduler = R8Scheduler.resume_from_checkpoint(
 # ...
 ```
 
-### 3\. Automatic Learning Rate Finder
+### 3\. Dynamic Learning Rate Discovery
 
-The scheduler can now perform a short, automated test to find a near-optimal starting (or highest) learning rate, removing the guesswork.
+Instead of a separate manual step, finding the optimal learning rate is now an optional, automated phase of the training warm-up.
 
-  * **How it Works**: The new `find_optimal_lr()` method starts at a very low LR and rapidly increases it with each batch. It records the loss at each step. When the loss explodes (shoots up or becomes `NaN`), the test stops. It then analyzes the loss curve and suggests an LR that is aggressive but stable (typically one order of magnitude lower than the learning rate at which the minimum loss occurred). Your model's state is automatically saved before the test and restored afterward, so it is not affected.
-  * **How to Use**: Call this method *before* you initialize your main scheduler.
+  * **What It Is**: When enabled, the scheduler begins the warm-up by aggressively increasing the learning rate at each step. It simultaneously monitors the model's stability using the gradient explosion recovery mechanism.
 
-<!-- end list -->
+  * **The Process**:
 
-```python
-# 1. Create a temporary scheduler instance for the test
-lr_finder_scheduler = R8Scheduler(num_samples=1000, batch_size=32, ...)
+    1.  **Aggressive Increase**: The LR grows rapidly, pushing the model to its limits.
+    2.  **Instability Detection**: The moment the loss becomes unstable or a gradient explosion occurs, the `_handle_gradient_explosion` logic is triggered.
+    3.  **Automatic Recovery & Finalization**: The scheduler immediately recovers to the last stable checkpoint (the CPU backup). The learning rate that caused the explosion is discarded. The new "peak" learning rate (`initial_lr`) is automatically set to half of the exploded rate, locking in a proven, stable maximum.
+    4.  **Seamless Transition**: The "discovery" phase ends. The scheduler logs the newly found optimal LR and transitions seamlessly into its standard decay schedule (e.g., cosine decay) starting from this new peak.
 
-# 2. Run the finder
-print("Finding optimal learning rate...")
-# You must provide your model, train function, and optionally a device
-optimal_lr = lr_finder_scheduler.find_optimal_lr(
-    model_state=mock_model_state_dict, 
-    train_step_func=my_train_step
-)
-print(f"Suggested Optimal LR: {optimal_lr:.6f}")
+  * **How to Use It**: Simply set `auto_find_lr=True` when creating the scheduler.
 
-# 3. Use the found LR to create your main scheduler for the real training
-scheduler = R8Scheduler(
-    num_samples=1000,
-    initial_lr=optimal_lr,
-    ...
-)
-# ...
-```
+    ```python
+    scheduler = R8Scheduler(
+        #... other parameters
+        auto_find_lr=True 
+    )
+    ```
+
+  * **Checkpointing**: Once a stable peak LR is found, it's saved in the checkpoint file. If you resume training from that checkpoint, the discovery process will not run again, ensuring consistency.
 
 ### 4\. Train by Time
 
